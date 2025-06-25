@@ -75,7 +75,7 @@ class ProductQueryService:
             "imageUrl": product.image_url,
             "inStock": self._get_inventory_data(product).quantity > 0 if self._get_inventory_data(product) else False,
             "stockQuantity": self._get_inventory_data(product).quantity if self._get_inventory_data(product) else 0,
-            "category": "category",
+            "category": product.category.name,
             "manufacturer": product.brand,
             "metadata": {
               "prescription": False,
