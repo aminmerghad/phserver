@@ -17,24 +17,12 @@ from typing import Tuple, Dict, Any
 @product_bp.route('/')
 class ProductCreateRoute(BaseRoute):
     """
-    
-    @product_bp.arguments(ProductSchema)
-    @product_bp.response(HTTPStatus.OK, ProductResponseSchema)   
-    responses:
-      201:
-        description: Product created successfully
-      400:
-        description: Invalid input data
-      401:
-        description: Unauthorized
-      403:
-        description: Forbidden
+    Product operations - Create and List
     """     
     @require_admin
     @product_bp.doc(description="Create a new product with inventory details")    
     @product_bp.arguments(ProductSchema) 
     @product_bp.response(HTTPStatus.CREATED, ProductResponseSchema)   
-    
     def post(self, request_data: Dict[str, Any]) -> Tuple[dict, int]: 
         """Create a new product"""
         try:
@@ -51,6 +39,8 @@ class ProductCreateRoute(BaseRoute):
                 message=f"Failed to create product: {str(e)}",
                 status_code=HTTPStatus.BAD_REQUEST
             )
+    
+    
 
 @product_bp.route('/<uuid:product_id>')
 class ProductRoute(BaseRoute):
@@ -121,6 +111,8 @@ class ProductRoute(BaseRoute):
                 status_code=HTTPStatus.BAD_REQUEST
             )
 
+
+            
 @product_bp.route('/list')
 class ProductListRoute(BaseRoute):
     """

@@ -10,8 +10,17 @@ from app.services.product_service.application.dtos.product_dto import ProductFie
 
 class ProductItemDTO(BaseModel):
     id: str
-    product_fields: ProductFieldsDto
-    inventory_fields: Optional[InventoryFieldsDto] = None
+    name: str
+    description: str
+    price: Optional[float] = 0.0
+    oldPrice: Optional[float] = None
+    discountPercent: Optional[int] = None
+    imageUrl: str
+    inStock: Optional[bool] = True
+    stockQuantity: Optional[int] = 0
+    category: str
+    manufacturer: str
+    metadata: Optional[Dict[str, Any]] = None
 
 class ProductListDTO(BaseModel):
     items: List[ProductItemDTO]
@@ -65,10 +74,38 @@ class ListProductsUseCase:
             # Get inventory data for this product if available
             inventory_data = self._get_inventory_data(product.id)
             
+            # Get category name through relationship
+            category_name = ""
+            if hasattr(product, 'category') and product.category:
+                category_name = product.category.name
+            
+            # Create flattened DTO structure
             product_dto = ProductItemDTO(
                 id=str(product.id),
-                product_fields=ProductFieldsDto(**product.model_dump()),
-                inventory_fields=InventoryFieldsDto(**inventory_data) if inventory_data else None
+                name=product.name or "",
+                description=product.description or "",
+                price=inventory_data.get('price', 0.0) if inventory_data else 0.0,
+                oldPrice=None,  # You can add this logic if you have old price data
+                discountPercent=None,  # You can add this logic if you have discount data
+                imageUrl=product.image_url or "",
+                inStock=inventory_data.get('quantity', 0) > 0 if inventory_data else False,
+                stockQuantity=inventory_data.get('quantity', 0) if inventory_data else 0,
+                category=category_name,  # Using actual category name
+                manufacturer=product.brand or "",  # Using brand as manufacturer
+                metadata={
+                    "dosage_form": product.dosage_form,
+                    "strength": product.strength,
+                    "package": product.package,
+                    "brand": product.brand,  # Keep brand in metadata for reference
+                    "status": str(product.status) if hasattr(product, 'status') else None,
+                    "category_id": str(product.category_id) if product.category_id else None,
+                    "created_at": str(product.created_at) if hasattr(product, 'created_at') else None,
+                    "updated_at": str(product.updated_at) if hasattr(product, 'updated_at') else None,
+                    "max_stock": inventory_data.get('max_stock') if inventory_data else None,
+                    "min_stock": inventory_data.get('min_stock') if inventory_data else None,
+                    "expiry_date": str(inventory_data.get('expiry_date')) if inventory_data and inventory_data.get('expiry_date') else None,
+                    "supplier_id": str(inventory_data.get('supplier_id')) if inventory_data and inventory_data.get('supplier_id') else None
+                }
             )
             
             product_dtos.append(product_dto)

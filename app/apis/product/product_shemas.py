@@ -33,6 +33,21 @@ class ProductSchema(Schema):
     id = fields.UUID(dump_only=True, metadata={"description": "The product ID"})
     product_fields=fields.Nested(ProductFieldsSchema)
     inventory_fields=fields.Nested(InventoryFieldsSchema)
+
+class ProductItemSchema(Schema):
+    """Schema for flattened product item in list responses"""
+    id = fields.Str(metadata={"description": "The product ID"})
+    name = fields.Str(metadata={"description": "Product name"})
+    description = fields.Str(metadata={"description": "Product description"})
+    price = fields.Float(metadata={"description": "Product price"})
+    oldPrice = fields.Float(allow_none=True, metadata={"description": "Previous price"})
+    discountPercent = fields.Int(allow_none=True, metadata={"description": "Discount percentage"})
+    imageUrl = fields.Str(metadata={"description": "Product image URL"})
+    inStock = fields.Bool(metadata={"description": "Whether product is in stock"})
+    stockQuantity = fields.Int(metadata={"description": "Available stock quantity"})
+    category = fields.Str(metadata={"description": "Product category"})
+    manufacturer = fields.Str(metadata={"description": "Product manufacturer"})
+    metadata = fields.Dict(allow_none=True, metadata={"description": "Additional product metadata"})
     
 class ProductFilterSchema(Schema):
     """Schema for product filtering"""
@@ -102,10 +117,10 @@ class ProductResponseSchema(Schema):
     
 class ProductPaginatedSchema(Schema):
     """Schema for paginated product response"""
-    items = fields.List(fields.Nested(ProductSchema), metadata={"description": "List of products"})
+    items = fields.List(fields.Nested(ProductItemSchema), metadata={"description": "List of products"})
     total = fields.Int(metadata={"description": "Total number of products"})
     page = fields.Int(metadata={"description": "Current page number"})
-    items_per_page = fields.Int(metadata={"description": "Items per page"})
+    page_size = fields.Int(metadata={"description": "Items per page"})
     total_pages = fields.Int(metadata={"description": "Total number of pages"})
 
 class ProductPaginatedResponseSchema(Schema):
