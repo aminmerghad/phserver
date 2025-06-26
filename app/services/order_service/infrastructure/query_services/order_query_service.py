@@ -185,15 +185,15 @@ class OrderQueryService:
         return OrderDTO(
             order_id=entity.id,
             user_id=entity.user_id,
-            status=entity.status.value,
-            total_amount=entity.total_amount.amount,
+            status=entity.status.value,  # Convert OrderStatus enum to string
+            total_amount=entity.total_amount,  # Now it's already a Decimal
             items=[{
-                'id': item.id,
-                'product_id': item.product_id,
-                'name': f"Product {item.product_id}",  # Use a default name since OrderItem doesn't have name
+                'id': str(item.id) if item.id else None,
+                'product_id': str(item.product_id),
+                'name': f"Product {str(item.product_id).split('-')[0]}",  # Use a default name since OrderItem doesn't have name
                 'quantity': item.quantity,
-                'price': item.price.amount,
-                'total_price': item.total_price.amount
+                'price': float(item.price.amount),
+                'total_price': float(item.total_price.amount)
             } for item in entity.items],
             notes=entity.notes,
             created_at=entity.created_at,

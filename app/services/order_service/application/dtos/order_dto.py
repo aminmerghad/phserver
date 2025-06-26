@@ -33,16 +33,18 @@ class OrderItemDTO:
 class OrderDTO:
     order_id: UUID
     user_id: UUID
-    status: OrderStatus
+    status: str
     total_amount: Decimal
-    items: List[OrderItemDTO]
+    items: List[dict]
     notes: Optional[str]
     created_at: datetime
     updated_at: datetime
     completed_at: Optional[datetime]
+
 @dataclass
 class CreateOrderResponse:
     order : OrderDTO
+
 @dataclass
 class OrderSummaryDTO:
     order_id: UUID
@@ -52,6 +54,7 @@ class OrderSummaryDTO:
     items_count: int
     created_at: datetime
     items: List[dict]
+
 @dataclass
 class OrderFilterPaginationDTO:
     page: int

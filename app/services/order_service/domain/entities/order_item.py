@@ -12,7 +12,7 @@ class OrderItem:
     quantity: int
     price: Money
     # name: str
-    id: UUID = None
+    id: UUID = field(default_factory=uuid4)  # Generate UUID if not provided
     created_at: datetime = field(default_factory=datetime.utcnow)
     updated_at: datetime = field(default_factory=datetime.utcnow)
 

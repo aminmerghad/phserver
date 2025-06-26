@@ -15,7 +15,7 @@ class OrderMapper:
             user_id=model.user_id,
             items=[self._item_to_entity(item) for item in model.items],
             status=model.status,
-            total_amount=Money(model.total_amount),
+            total_amount=Decimal(str(model.total_amount)),
             notes=model.notes,
             created_at=model.created_at,
             updated_at=model.updated_at,
@@ -26,11 +26,9 @@ class OrderMapper:
         """Convert Order entity to OrderModel"""
        
         return OrderModel(
-            user_id=uuid4(),
-            # user_id=entity.user_id,
+            user_id=entity.user_id if entity.user_id else uuid4(),
             status=entity.status,
-            total_amount=0,
-            # total_amount=entity.total_amount.amount,
+            total_amount=float(entity.total_amount) if entity.total_amount else 0,
             notes=entity.notes,
             completed_at=entity.completed_at,
             items=[self._item_to_model(item, entity.id) for item in entity.items]
@@ -40,9 +38,12 @@ class OrderMapper:
         """Convert OrderItemModel to OrderItem entity"""
         
         return OrderItem(
+            id=model.id,
             product_id=model.product_id,
             quantity=model.quantity,
-            price=Money(model.price)
+            price=Money(model.price),
+            created_at=model.created_at,
+            updated_at=model.updated_at
         )
 
     def _item_to_model(self, entity: OrderItem, order_id: str) -> OrderItemModel:
@@ -51,7 +52,6 @@ class OrderMapper:
             id=entity.id,
             order_id=order_id,
             product_id=entity.product_id,
-            # name=entity.name,
             quantity=entity.quantity,
             price=entity.price.amount
         ) 

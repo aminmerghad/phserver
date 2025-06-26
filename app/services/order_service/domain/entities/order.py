@@ -14,15 +14,14 @@ from app.services.order_service.domain.exceptions.order_errors import (
 
 @dataclass
 class OrderEntity:
-    id: UUID = None
     user_id: UUID = None
     items: List[OrderItem] = field(default_factory=list)
-    status: OrderStatus = None
-    total_amount : Decimal = field(default_factory=Decimal(0))
-    # total_amount: Money = field(default_factory=lambda: Money(Decimal("0")))
+    status: OrderStatus = OrderStatus.PENDING
+    total_amount: Decimal = field(default_factory=lambda: Decimal('0'))
     notes: str = None    
-    created_at: datetime = None
-    updated_at: datetime = None
+    id: UUID = field(default_factory=uuid4)
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     completed_at: Optional[datetime] = None
 
     def __post_init__(self):

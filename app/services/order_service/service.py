@@ -213,16 +213,21 @@ class OrderService:
                 return None
             # Use the query service's _to_dto method to convert OrderModel to OrderDTO
             order_dto = self._query_service._to_dto(order)
+            if not order_dto:
+                logger.warning(f"Failed to convert order {order_id} to DTO")
+                return None
+                
             return {
-                'id': str(order_dto.order_id),
+                'order_id': str(order_dto.order_id),
+                'consumer_id': str(order_dto.user_id),  # Changed from 'id' to 'order_id' for consistency
                 'user_id': str(order_dto.user_id),
                 'status': order_dto.status,
                 'total_amount': float(order_dto.total_amount),
                 'items': order_dto.items,
                 'notes': order_dto.notes,
-                'created_at': order_dto.created_at,
-                'updated_at': order_dto.updated_at,
-                'completed_at': order_dto.completed_at
+                'created_at': order_dto.created_at.isoformat() if order_dto.created_at else None,
+                'updated_at': order_dto.updated_at.isoformat() if order_dto.updated_at else None,
+                'completed_at': order_dto.completed_at.isoformat() if order_dto.completed_at else None
             }
         except Exception as e:
             logger.error(f"Error fetching order {order_id}: {str(e)}")
