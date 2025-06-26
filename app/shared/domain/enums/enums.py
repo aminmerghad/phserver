@@ -5,4 +5,5 @@ class ServiceType(Enum):
     INVENTORY = "inventory",
     ORDER = "order",
     PRODUCT = "product",
-    CATEGORY = "category"
+    CATEGORY = "category",
+    AUTH = "auth"
