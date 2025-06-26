@@ -1,4 +1,4 @@
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional, Dict, Any, Tuple
 from uuid import UUID
 from datetime import datetime, timedelta
@@ -52,7 +52,8 @@ class ProductRepository(ProductRepositoryInterface):
             category_id=model.category_id,
             created_at=model.created_at,
             updated_at=model.updated_at,
-            status=model.status
+            status=model.status,
+            category_name=model.category.name if model.category else None
         )
 
     def get_by_id(self, product_id: UUID) -> Optional[ProductEntity]:
@@ -121,7 +122,7 @@ class ProductRepository(ProductRepositoryInterface):
         """
         logger.info(f"Listing products with filters: {filters}, page: {page}, page_size: {page_size}")
         try:
-            query = self._session.query(ProductModel)
+            query = self._session.query(ProductModel).options(joinedload(ProductModel.category))
             
             if filters:
                 filter_conditions = []

@@ -75,9 +75,7 @@ class ListProductsUseCase:
             inventory_data = self._get_inventory_data(product.id)
             
             # Get category name through relationship
-            category_name = ""
-            if hasattr(product, 'category') and product.category:
-                category_name = product.category.name
+            category_name = product.category_name or ""
             
             # Create flattened DTO structure
             product_dto = ProductItemDTO(

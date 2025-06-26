@@ -19,6 +19,7 @@ class ProductEntity(BaseModel):
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
     status: ProductStatus
+    category_name: Optional[str] = None
     
     
     # def get_effective_price(self) -> Optional[float]:
