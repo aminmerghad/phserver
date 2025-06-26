@@ -27,20 +27,60 @@ class OrderQueryService:
 
     def get_order_by_id(self, order_id: UUID) -> Optional[OrderModel]:
         """Get order details by ID with eager loading of items"""
-        # cache_key = f"order_{order_id}"
-        # cached_result = self._get_from_cache(cache_key)
-        
-        # if cached_result:
-        #     return cached_result
+        try:
+            order = self._session.query(OrderModel).options(
+                joinedload(OrderModel.items)  # Eager load items
+            ).filter(
+                OrderModel.id == order_id
+            ).first()
             
-        order = self._session.query(OrderModel).options(
-            joinedload(OrderModel.items)  # Eager load items
-        ).filter(
-            OrderModel.id == order_id
-        ).first()
-        
-        # self._add_to_cache(cache_key, order)
-        return order
+            if order:
+                # Check for encoding issues in text fields
+                try:
+                    # Test accessing each field that could have encoding issues
+                    _ = str(order.id)
+                    _ = str(order.user_id) if order.user_id else None
+                    _ = str(order.status)
+                    _ = float(order.total_amount) if order.total_amount else 0
+                    
+                    # Check notes field - this is likely where the encoding issue is
+                    if order.notes:
+                        # Try to encode/decode to detect issues
+                        notes_safe = order.notes.encode('utf-8', errors='ignore').decode('utf-8')
+                        if notes_safe != order.notes:
+                            # There was corrupted data, log and clean it
+                            import logging
+                            logger = logging.getLogger(__name__)
+                            logger.warning(f"Found corrupted UTF-8 data in order {order_id} notes field. Cleaning...")
+                            # You could update the database here if needed
+                            order.notes = notes_safe
+                    
+                    # Check items for encoding issues
+                    for item in order.items:
+                        _ = str(item.id)
+                        _ = str(item.product_id)
+                        _ = int(item.quantity)
+                        _ = float(item.price)
+                        
+                except UnicodeDecodeError as e:
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.error(f"UTF-8 encoding error in order {order_id}: {str(e)}")
+                    # Try to clean the data or return None
+                    return None
+                except Exception as e:
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.error(f"Error processing order {order_id} data: {str(e)}")
+                    return None
+            
+            return order
+            
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Database error fetching order {order_id}: {str(e)}")
+            return None
 
     def get_orders_by_user_id(self, user_id: UUID, page: int = 1, per_page: int = 10) -> List[OrderModel]:
         """Get all orders for a specific user ordered by creation date (newest first)"""

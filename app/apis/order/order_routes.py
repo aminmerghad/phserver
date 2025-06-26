@@ -178,8 +178,8 @@ class OrderRoutes(BaseRoute):
 @order_bp.route('/orders/<uuid:order_id>')
 class OrderDetailRoutes(BaseRoute):
     @order_bp.doc(summary="Get order by ID", description="Get detailed information about a specific order")
-    @order_bp.response(HTTPStatus.OK, OrderResponseSchema)
-    @order_bp.response(HTTPStatus.NOT_FOUND, ErrorResponseSchema)
+    # @order_bp.response(HTTPStatus.OK, OrderResponseSchema)
+    # @order_bp.response(HTTPStatus.NOT_FOUND, ErrorResponseSchema)
     @jwt_required()
     def get(self, order_id):
         order = container.order_service().get_order(order_id)

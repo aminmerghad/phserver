@@ -207,16 +207,20 @@ class OrderService:
     def get_order(self, order_id: UUID) -> Optional[dict]:
         """Get order by ID"""
         try:
+            logger.info(f"Fetching order {order_id} from database...")
             order = self._query_service.get_order_by_id(order_id)
             if not order:
-                logger.info(f"Order {order_id} not found")
+                logger.info(f"Order {order_id} not found in database")
                 return None
+                
+            logger.info(f"Order {order_id} found, converting to DTO...")
             # Use the query service's _to_dto method to convert OrderModel to OrderDTO
             order_dto = self._query_service._to_dto(order)
             if not order_dto:
                 logger.warning(f"Failed to convert order {order_id} to DTO")
                 return None
                 
+            logger.info(f"Order {order_id} DTO created successfully, building response...")
             return {
                 'order_id': str(order_dto.order_id),
                 'consumer_id': str(order_dto.user_id),  # Changed from 'id' to 'order_id' for consistency
@@ -229,8 +233,12 @@ class OrderService:
                 'updated_at': order_dto.updated_at.isoformat() if order_dto.updated_at else None,
                 'completed_at': order_dto.completed_at.isoformat() if order_dto.completed_at else None
             }
+        except UnicodeDecodeError as e:
+            logger.error(f"UTF-8 encoding error fetching order {order_id}: {str(e)}")
+            logger.error(f"Error details - byte position: {e.start}-{e.end}, reason: {e.reason}")
+            raise ValueError(f"Order {order_id} contains corrupted text data that cannot be decoded")
         except Exception as e:
-            logger.error(f"Error fetching order {order_id}: {str(e)}")
+            logger.error(f"Error fetching order {order_id}: {str(e)}", exc_info=True)
             raise e
     
     def get_orders(self, filter_dto: OrderFilterDTO) -> OrderFilterResponseDTO:
