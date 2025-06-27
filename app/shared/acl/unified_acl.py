@@ -1,7 +1,7 @@
 from typing import Callable, Dict, Any, Optional
 from dataclasses import dataclass
 
-from app.shared.acl.translators import InventoryTranslator, ProductTranslator
+from app.shared.acl.translators import InventoryTranslator, ProductTranslator, OrderTranslator, AuthTranslator, DeliveryTranslator
 from app.shared.domain.enums.enums import ServiceType
 
 class ServiceResponse:
@@ -50,6 +50,9 @@ class UnifiedACL:
         return {
             ServiceType.INVENTORY: InventoryTranslator(),
             ServiceType.PRODUCT: ProductTranslator(),
+            ServiceType.ORDER: OrderTranslator(),
+            ServiceType.AUTH: AuthTranslator(),
+            ServiceType.DELIVERY: DeliveryTranslator(),
         }
     def execute_service_operation(
         self, 
