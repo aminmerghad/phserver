@@ -17,13 +17,69 @@ from app.services.order_service.application.dtos.order_dto import (
 from app.services.order_service.domain.value_objects.order_status import OrderStatus
 from app.services.order_service.infrastructure.persistence.mappers.order_mapper import OrderMapper
 from app.services.order_service.infrastructure.persistence.models.order import OrderModel, OrderItemModel
+from app.shared.acl.unified_acl import UnifiedACL
 
 class OrderQueryService:
-    def __init__(self, session: Session):
+    def __init__(self, session: Session, acl: UnifiedACL = None):
         self._session = session
         self._mapper = OrderMapper()
+        self._acl = acl
         # self._cache = {}  # Simple in-memory cache
         # self._cache_ttl = 300  # 5 minutes in seconds
+
+    def _get_product_name(self, product_id: UUID) -> str:
+        """
+        Get product name from product service via ACL.
+        Falls back to a default name if product service is unavailable.
+        """
+        if not self._acl:
+            return f"Product {str(product_id).split('-')[0]}"
+            
+        try:
+            from app.services.order_service.infrastructure.adapters.outgoing.product_adapter import ProductServiceAdapter
+            product_adapter = ProductServiceAdapter(self._acl)
+            product = product_adapter.get_product_by_id(product_id)
+            
+            if product and 'name' in product:
+                return product['name']
+            else:
+                return f"Product {str(product_id).split('-')[0]}"
+                
+        except Exception as e:
+            # Log the error but don't break the order query
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Failed to fetch product name for {product_id}: {str(e)}")
+            return f"Product {str(product_id).split('-')[0]}"
+
+    def _get_product_names_batch(self, product_ids: List[UUID]) -> Dict[UUID, str]:
+        """
+        Get multiple product names in batch to improve performance.
+        """
+        if not self._acl:
+            return {pid: f"Product {str(pid).split('-')[0]}" for pid in product_ids}
+            
+        try:
+            from app.services.order_service.infrastructure.adapters.outgoing.product_adapter import ProductServiceAdapter
+            product_adapter = ProductServiceAdapter(self._acl)
+            products = product_adapter.get_products_by_ids(product_ids)
+            
+            # Create a mapping of product_id to product_name
+            product_names = {}
+            for product_id in product_ids:
+                if product_id in products and 'name' in products[product_id]:
+                    product_names[product_id] = products[product_id]['name']
+                else:
+                    product_names[product_id] = f"Product {str(product_id).split('-')[0]}"
+                    
+            return product_names
+            
+        except Exception as e:
+            # Log the error but don't break the order query
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Failed to fetch product names in batch: {str(e)}")
+            return {pid: f"Product {str(pid).split('-')[0]}" for pid in product_ids}
 
     def get_order_by_id(self, order_id: UUID) -> Optional[OrderModel]:
         """Get order details by ID with eager loading of items"""
@@ -222,6 +278,13 @@ class OrderQueryService:
             return None
             
         entity = self._mapper.to_entity(model)
+        
+        # Get all product IDs from the order items
+        product_ids = [item.product_id for item in entity.items]
+        
+        # Fetch product names in batch for better performance
+        product_names = self._get_product_names_batch(product_ids)
+        
         return OrderDTO(
             order_id=entity.id,
             user_id=entity.user_id,
@@ -230,7 +293,7 @@ class OrderQueryService:
             items=[{
                 'id': str(item.id) if item.id else None,
                 'product_id': str(item.product_id),
-                'name': f"Product {str(item.product_id).split('-')[0]}",  # Use a default name since OrderItem doesn't have name
+                'name': product_names.get(item.product_id, f"Product {str(item.product_id).split('-')[0]}"),  # Use actual product name
                 'quantity': item.quantity,
                 'price': float(item.price.amount),
                 'total_price': float(item.total_price.amount)
@@ -246,6 +309,12 @@ class OrderQueryService:
         """Convert OrderModel to OrderSummaryDTO"""
         if not model:
             return None
+        
+        # Get all product IDs from the order items
+        product_ids = [item.product_id for item in model.items] if model.items else []
+        
+        # Fetch product names in batch for better performance
+        product_names = self._get_product_names_batch(product_ids)
             
         return OrderSummaryDTO(
             order_id=model.id,
@@ -257,7 +326,7 @@ class OrderQueryService:
             items=[{
                 'id': item.id,
                 'product_id': item.product_id,
-                'name': f"Product {str(item.product_id).split('-')[0]}",  # Use a default name since OrderItem doesn't have name
+                'name': product_names.get(item.product_id, f"Product {str(item.product_id).split('-')[0]}"),  # Use actual product name
                 'quantity': item.quantity,
                 'price': item.price,
                 'total_price': item.quantity*item.price

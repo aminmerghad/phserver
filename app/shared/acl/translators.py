@@ -5,6 +5,7 @@ import logging
 
 from pydantic import BaseModel
 from app.services.product_service.application.dtos.product_dto import InventoryFieldsDto
+from app.services.product_service.application.queries.get_product_by_id import GetProductByIdQuery
 from app.services.product_service.domain.requests.get_inventory_by_id_request import GetInventoryByIdRequest
 from app.shared.contracts.inventory.enums import StockStatusContract
 from app.shared.contracts.inventory.stock_check import (
@@ -49,12 +50,27 @@ class GetInventoryTranslator():
 
 
 class GetProductTranslator():
-    def to_service_format(self, data: Dict[str, Any]) -> UUID:
-        """Convert external data to a product ID for the service"""
-        return data.get('product_id')
+    def to_service_format(self, data: Dict[str, Any]) -> GetProductByIdQuery:
+        """Convert external data to a GetProductByIdQuery for the service"""
+        from app.services.product_service.application.queries.get_product_by_id import GetProductByIdQuery
+        from uuid import UUID
+        
+        product_id = data.get('product_id')
+        if isinstance(product_id, str):
+            product_id = UUID(product_id)
+            
+        return GetProductByIdQuery(id=product_id)
         
     def to_response_format(self, response):
-        """Return the product data directly"""
+        """Extract the product name and relevant data from GetProductResponseDTO"""
+        if hasattr(response, 'product_fields') and response.product_fields:
+            return {
+                'id': str(response.id),
+                'name': response.product_fields.name,
+                'description': response.product_fields.description,
+                'brand': response.product_fields.brand,
+                'status': response.product_fields.status.value if response.product_fields.status else None
+            }
         return response
 
 

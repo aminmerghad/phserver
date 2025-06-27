@@ -55,7 +55,7 @@ class OrderService:
 
     def _init_resources(self):
         self._uow = SQLAlchemyUnitOfWork(self._db_session, self._event_bus, self._acl)
-        self._query_service = OrderQueryService(self._db_session)
+        self._query_service = OrderQueryService(self._db_session, self._acl)
         self._create_order_use_case = CreateOrderUseCase(self._uow, self._query_service)
         self._update_order_use_case = UpdateOrderUseCase(self._uow, self._query_service)
         self._cancel_order_use_case = CancelOrderUseCase(self._uow, self._query_service)
