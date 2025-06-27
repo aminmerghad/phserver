@@ -1,6 +1,7 @@
 from dependency_injector import containers, providers
 
 from app.services.category_service.service import CategoryService
+from app.services.delivery_service.service import DeliveryService
 from app.services.order_service.service import OrderService
 from app.shared.acl.unified_acl import UnifiedACL
 from app.shared.application.events.event_bus import EventBus
@@ -55,6 +56,12 @@ class Container(containers.DeclarativeContainer):
         event_bus=event_bus,
         acl=unified_acl
     )
+    delivery_service = providers.Singleton(
+        DeliveryService,
+        db=db,
+        event_bus=event_bus,
+        acl=unified_acl
+    )
 
    
 
@@ -65,6 +72,7 @@ class Container(containers.DeclarativeContainer):
         product_service: ProductService,
         order_service: OrderService,
         auth_service: AuthService,
+        delivery_service: DeliveryService,
     ) -> UnifiedACL:
         unified_acl.register_service(
             ServiceType.INVENTORY, 
@@ -82,6 +90,10 @@ class Container(containers.DeclarativeContainer):
             ServiceType.AUTH, 
             lambda: auth_service
         )
+        unified_acl.register_service(
+            ServiceType.DELIVERY, 
+            lambda: delivery_service
+        )
        
         return unified_acl
     
@@ -93,4 +105,6 @@ class Container(containers.DeclarativeContainer):
         product_service=product_service,
         order_service=order_service,
         auth_service=auth_service,
+        delivery_service=delivery_service
+
     )
