@@ -31,9 +31,10 @@ class CreateOrderDto(BaseModel):
     status: OrderStatus
     total_amount: float
     created_at: datetime
-    consumer_id:Optional[UUID]
+    consumer_id: Optional[UUID]
     updated_at: Optional[datetime]
     completed_at: Optional[datetime]
+    notes: Optional[str] = None
 
 class CreateOrderUseCase:
     def __init__(self, uow: UnitOfWork, order_qr: OrderQueryService):
@@ -168,7 +169,8 @@ class CreateOrderUseCase:
             updated_at=order.updated_at,
             completed_at=order.completed_at,
             items=order_items,      
-            consumer_id=order.user_id     
+            consumer_id=order.user_id,
+            notes=order.notes
         )
     
     def _calculate_total_amount(self, order_items: List[OrderItem]) -> Money:
