@@ -1,6 +1,7 @@
 from datetime import datetime
 import logging
 from uuid import UUID
+from dataclasses import asdict
 
 from app.services.inventory_service.application.commands.record_movement_command import RecordMovementCommand
 from app.services.inventory_service.application.events.inventory_create_requested_event import InventoryCreateRequestedEvent
@@ -28,12 +29,20 @@ class InventoryEventHandler:
         # self._uow.commit()
 
     def handle_inventory_create_requested(self, event: InventoryCreateRequestedEvent) -> None:        
-        inventory_data = event.model_dump()  # Assuming event has a method to serialize its data
+        # Convert dataclass to dictionary, excluding metadata
+        inventory_data = asdict(event)
+        # Remove metadata field if it exists
+        inventory_data.pop('metadata', None)
+        
         inventory_entity = InventoryEntity(**inventory_data)  # Create an InventoryEntity from the event data      
         self._uow.inventory_repository.add(inventory_entity)  # Add the inventory entity to the unit of work
         logger.info(f"Inventory created successfully for product ID: {inventory_entity.product_id}")
-    def handle_inventory_update_requested(self,event:InventoryUpdateRequestedEvent):
-        inventory_data = event.model_dump()  
+        
+    def handle_inventory_update_requested(self, event: InventoryUpdateRequestedEvent):
+        # Convert dataclass to dictionary, excluding metadata
+        inventory_data = asdict(event)
+        # Remove metadata field if it exists
+        inventory_data.pop('metadata', None)
         
         inventory_entity = InventoryEntity(**inventory_data)
         
@@ -51,6 +60,8 @@ class InventoryEventHandler:
         """
         order_id = event.order_id
         
+        logger.info(f"Processing stock release request for order {order_id}")
+        
         # Check for duplicate processing (idempotency)
         if order_id in self._processed_orders:
             logger.warning(f"Stock release for order {order_id} already processed. Skipping duplicate request.")
@@ -64,11 +75,13 @@ class InventoryEventHandler:
                 for item in event.items:
                     product_id = item['product_id']
                     quantity = item['quantity']
+                    logger.info(f"Processing item: product_id={product_id}, quantity={quantity}")
                     item_result = self._process_stock_release_item(product_id, quantity, order_id)
                     processed_items.append(item_result)
                     
                     if not item_result['success']:
                         all_items_processed = False
+                        logger.error(f"Failed to process item {product_id}: {item_result['message']}")
                         break  # Stop processing if any item fails
                 
 
@@ -96,7 +109,7 @@ class InventoryEventHandler:
                     
         except Exception as e:
             self._uow.rollback()
-            logger.error(f"Error processing stock release for order {order_id}: {str(e)}")
+            logger.error(f"Error processing stock release for order {order_id}: {str(e)}", exc_info=True)
             # Publish failure event with error
             # self._uow.publish_event(StockReleaseProcessedEvent(
             #     order_id=order_id,
