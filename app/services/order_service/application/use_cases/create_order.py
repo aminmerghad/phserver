@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import Optional, List, Dict, Any
 from uuid import UUID
 from datetime import datetime
+import logging
 
 from pydantic import BaseModel
 from app.services.inventory_service.application.events.stock_release_requested_event import StockReleaseRequestedEvent
@@ -57,10 +58,17 @@ class CreateOrderUseCase:
         
         # Create the order in PENDING status
         order = self._create_order(command, order_items, total_amount)
+        
         try:
-                # Publish stock release event
+            # Create DTO for response first to check for any serialization issues
+            order_dto = self._create_order_dto(order)
+            
+            # Commit the order transaction first
+            self.uow.commit()
+            
+            # Publish stock release event AFTER order is successfully saved
             self.uow.publish(StockReleaseRequestedEvent(
-                order_id=order.id,
+                order_id=str(order.id),  # Ensure it's a string
                 items=[{
                     'product_id': str(item.product_id),
                     'quantity': item.quantity
@@ -71,20 +79,19 @@ class CreateOrderUseCase:
             # self.uow.publish(OrderCreatedEvent(
             #     order_id=str(order.id)          
             # ))
-                
-            # Commit transaction
-            self.uow.commit()
             
-                # Run post-creation workflows in a separate process/thread
+            # Run post-creation workflows in a separate process/thread
             # self._trigger_post_creation_workflows(order)
                 
-                # Create DTO for response
-            order_dto = self._create_order_dto(order)
             return order_dto
                 
         except Exception as e:
-                # Rollback transaction in case of error
+            # Rollback transaction in case of error
             self.uow.rollback()
+            
+            # Log the error for debugging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error in order creation process: {str(e)}", exc_info=True)
                 
             # Re-raise the exception for higher-level handling
             raise OrderCreationError(
@@ -135,12 +142,12 @@ class CreateOrderUseCase:
         order_items = [OrderItemDTO(
             product_id=str(item.product_id),
             quantity=item.quantity,
-            price=float(item.price.amount)
+            price=float(item.price.amount if hasattr(item.price, 'amount') else item.price)
             ) for item in order.items]
         return CreateOrderDto(
             order_id=order.id,
             status=order.status,
-            total_amount=float(order.total_amount),
+            total_amount=float(order.total_amount if hasattr(order, 'total_amount') else 0),
             created_at=order.created_at,
             updated_at=order.updated_at,
             completed_at=order.completed_at,

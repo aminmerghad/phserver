@@ -19,6 +19,8 @@ logger = logging.getLogger(__name__)
 class InventoryEventHandler:
     def __init__(self, uow: UnitOfWork):
         self._uow = uow
+        # Simple in-memory tracking of processed orders (in production, use Redis or database)
+        self._processed_orders = set()
         
     def handle_stock_received(self, event: StockReceived):
         pass
@@ -48,26 +50,32 @@ class InventoryEventHandler:
             event: StockReleaseRequestedEvent containing order_id and items
         """
         order_id = event.order_id
+        
+        # Check for duplicate processing (idempotency)
+        if order_id in self._processed_orders:
+            logger.warning(f"Stock release for order {order_id} already processed. Skipping duplicate request.")
+            return
+        
         all_items_processed = True
         processed_items = []
+        
         try:
-                
-            # with self._uow:
+            with self._uow:
                 for item in event.items:
                     product_id = item['product_id']
                     quantity = item['quantity']
                     item_result = self._process_stock_release_item(product_id, quantity, order_id)
                     processed_items.append(item_result)
                     
-                    # if not item_result['success']:
-                    #     all_items_processed = False
-               
+                    if not item_result['success']:
+                        all_items_processed = False
+                        break  # Stop processing if any item fails
                 
 
                 # If any item failed, we need to rollback any already processed items
                 if not all_items_processed:
-                    
                     self._uow.rollback()
+                    logger.warning(f"Stock release failed for order {order_id}. Rolling back all changes.")
                     # Publish failure event
                     # self._uow.publish_event(StockReleaseProcessedEvent(
                     #     order_id=order_id,
@@ -75,15 +83,20 @@ class InventoryEventHandler:
                     #     items=processed_items
                     # ))
                 else:
+                    # Mark as processed to prevent duplicates
+                    self._processed_orders.add(order_id)
                     self._uow.commit()
+                    logger.info(f"Stock release successful for order {order_id}")
                     # Publish success event
                     # self._uow.publish_event(StockReleaseProcessedEvent(
                     #     order_id=order_id,
                     #     success=True,
                     #     items=processed_items
                     # ))
+                    
         except Exception as e:
             self._uow.rollback()
+            logger.error(f"Error processing stock release for order {order_id}: {str(e)}")
             # Publish failure event with error
             # self._uow.publish_event(StockReleaseProcessedEvent(
             #     order_id=order_id,
@@ -113,11 +126,30 @@ class InventoryEventHandler:
             inventory_item = self._uow.inventory_repository.get_by_product_id(
                 UUID(product_id))
             
-            inventory_item.quantity = inventory_item.quantity-quantity
+            if not inventory_item:
+                return {
+                    'product_id': product_id,
+                    'quantity': quantity,
+                    'success': False,
+                    'message': f'Product {product_id} not found in inventory'
+                }
+            
+            # Check if we have enough stock
+            if inventory_item.quantity < quantity:
+                return {
+                    'product_id': product_id,
+                    'quantity': quantity,
+                    'success': False,
+                    'message': f'Insufficient stock. Available: {inventory_item.quantity}, Requested: {quantity}'
+                }
 
-            self._uow.inventory_repository.update(
-                inventory_item
-            )            
+            # Subtract the stock
+            inventory_item.quantity = inventory_item.quantity - quantity
+            
+            # Update the inventory
+            self._uow.inventory_repository.update(inventory_item)
+            
+            logger.info(f"Stock released for product {product_id}: {quantity} units (remaining: {inventory_item.quantity})")
             
             # # Create movement command
             # command = RecordMovementCommand(
@@ -137,10 +169,12 @@ class InventoryEventHandler:
                 'product_id': product_id,
                 'quantity': quantity,
                 'success': True,
-                'message': 'Stock released successfully'
+                'message': 'Stock released successfully',
+                'remaining_quantity': inventory_item.quantity
             }
             
         except Exception as e:
+            logger.error(f"Error processing stock release for product {product_id}: {str(e)}")
             return {
                 'product_id': product_id,
                 'quantity': quantity,
