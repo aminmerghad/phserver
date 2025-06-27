@@ -1,4 +1,5 @@
 from marshmallow import Schema, fields, validate
+from decimal import Decimal
 
 from app.services.order_service.domain.value_objects.order_status import OrderStatus
 
@@ -6,8 +7,8 @@ class OrderItemSchema(Schema):
     id = fields.Str(dump_only=True)
     product_id = fields.UUID(required=True)
     quantity = fields.Integer(required=True, validate=validate.Range(min=1))
-    price = fields.Float(required=False)  # Can be calculated on server if not provided
-    total_price = fields.Float(dump_only=True)
+    price = fields.Decimal(required=True, validate=validate.Range(min=0))  # Changed to Decimal and made required
+    total_price = fields.Decimal(dump_only=True)  # Changed to Decimal
     name = fields.Str(required=False)
     
 class OrderSchema(Schema):
@@ -16,7 +17,7 @@ class OrderSchema(Schema):
     user_id = fields.UUID(dump_only=True)
     items = fields.List(fields.Nested(OrderItemSchema))
     status = fields.Enum(enum=OrderStatus, by_value=True)
-    total_amount = fields.Float()
+    total_amount = fields.Decimal()
     notes = fields.Str(allow_none=True)
     created_at = fields.DateTime(dump_only=True)
     updated_at = fields.DateTime(dump_only=True)
@@ -27,8 +28,8 @@ class OrderFilterSchema(Schema):
     status = fields.String(required=False, description="Filter by order status")
     start_date = fields.DateTime(required=False, description="Filter by start date")
     end_date = fields.DateTime(required=False, description="Filter by end date")
-    min_amount = fields.Float(required=False, description="Filter by minimum amount")
-    max_amount = fields.Float(required=False, description="Filter by maximum amount")
+    min_amount = fields.Decimal(required=False, description="Filter by minimum amount")
+    max_amount = fields.Decimal(required=False, description="Filter by maximum amount")
     page = fields.Integer(required=False, missing=1, description="Page number")
     per_page = fields.Integer(required=False, missing=10, description="Items per page")
 

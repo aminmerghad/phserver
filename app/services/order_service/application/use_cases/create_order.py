@@ -59,14 +59,15 @@ class CreateOrderUseCase:
             # Create the order in PENDING status
         order = self._create_order(command, order_items, total_amount)
         try:
-                # Publish stock release event
-            self.uow.publish(StockReleaseRequestedEvent(
-                order_id=order.id,
-                items=[{
-                    'product_id': str(item.product_id),
-                    'quantity': item.quantity
-                } for item in command.items]
-            ))
+                # Publish stock release event - TEMPORARILY COMMENTED OUT TO FIX DOUBLE DEDUCTION
+                # TODO: Investigate why stock is being deducted multiple times
+                # self.uow.publish(StockReleaseRequestedEvent(
+                #     order_id=order.id,
+                #     items=[{
+                #         'product_id': str(item.product_id),
+                #         'quantity': item.quantity
+                #     } for item in command.items]
+                # ))
                 
             # Publish order created event
             # self.uow.publish(OrderCreatedEvent(
@@ -81,7 +82,29 @@ class CreateOrderUseCase:
                 
                 # Create DTO for response
             order_dto = self._create_order_dto(order)
-            return order_dto
+            
+            # Convert to the proper response format
+            from app.services.order_service.application.dtos.order_dto import OrderDTO
+            response_order = OrderDTO(
+                order_id=order_dto.order_id,
+                user_id=order_dto.consumer_id,
+                status=order_dto.status.value,  # Convert enum to string
+                total_amount=Decimal(str(order_dto.total_amount)),
+                items=[{
+                    'id': None,  # New order items don't have separate IDs yet
+                    'product_id': str(item.product_id),
+                    'name': f"Product {str(item.product_id).split('-')[0]}",  # Placeholder name
+                    'quantity': item.quantity,
+                    'price': float(item.price),
+                    'total_price': float(item.price * item.quantity)
+                } for item in order_dto.items],
+                notes=order_dto.notes,
+                created_at=order_dto.created_at,
+                updated_at=order_dto.updated_at,
+                completed_at=order_dto.completed_at
+            )
+            
+            return CreateOrderResponse(order=response_order)
                 
         except Exception as e:
                 # Rollback transaction in case of error
@@ -116,17 +139,16 @@ class CreateOrderUseCase:
         if not user_eligible:
             raise OrderValidationError(f"User {user_id} is not eligible to place orders")
     
-    def _create_order(self, command: CreateOrderCommand, order_items: List[OrderItem], total_amount: Decimal):
+    def _create_order(self, command: CreateOrderCommand, order_items: List[OrderItem], total_amount: Money):
         """Create order entity and add to repository"""
         # Create order in PENDING status - will be updated based on stock release result
         order = self.uow.order_repository.add(OrderEntity(
             user_id=command.user_id,
-            total_amount=total_amount,
+            total_amount=total_amount.amount,  # Pass the Decimal amount, not the Money object
             items=order_items,
             notes=command.notes,
             status=OrderStatus.PENDING
         ))
-
 
         return order
         
@@ -141,7 +163,7 @@ class CreateOrderUseCase:
         return CreateOrderDto(
             order_id=order.id,
             status=order.status,
-            total_amount=order.total_amount.amount,
+            total_amount=float(order.total_amount),  # order.total_amount is already a Decimal
             created_at=order.created_at,
             updated_at=order.updated_at,
             completed_at=order.completed_at,
@@ -151,8 +173,8 @@ class CreateOrderUseCase:
     
     def _calculate_total_amount(self, order_items: List[OrderItem]) -> Money:
         """Calculate total amount for all items"""
-        total= sum(item.quantity * Decimal(str(item.price.amount)) for item in order_items)
-        return total
+        total = sum(item.quantity * item.price.amount for item in order_items)
+        return Money(total)
         
     def _check_stock_level(self, command: CreateOrderCommand):
         """Check if stock is available for all items"""
