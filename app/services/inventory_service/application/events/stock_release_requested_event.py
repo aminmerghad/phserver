@@ -1,14 +1,13 @@
 from dataclasses import dataclass
-from app.shared.application.events.event_bus import Event
 
 
 @dataclass
-class StockReleaseRequestedEvent(Event):
+class StockReleaseRequestedEvent():
     order_id: str
     items: list[dict]
 
 @dataclass
-class StockReleaseFailedEvent(Event):
+class StockReleaseFailedEvent():
     order_id: str
     items: list[dict]
 

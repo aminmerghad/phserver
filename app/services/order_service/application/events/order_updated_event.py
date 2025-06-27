@@ -2,10 +2,9 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Dict, Any, Optional
 from uuid import UUID
-from app.shared.application.events.event_bus import Event
 
 @dataclass
-class OrderUpdatedEvent(Event):
+class OrderUpdatedEvent:
     """
     Event representing an order that has been updated.
     Contains the order ID and relevant information about the update.
@@ -16,9 +15,6 @@ class OrderUpdatedEvent(Event):
     updated_by: str
     timestamp: str
     metadata: Optional[Dict[str, Any]] = None
-    
-    def __post_init__(self):
-        super().__post_init__()  # Call the parent's __post_init__
     
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'OrderUpdatedEvent':

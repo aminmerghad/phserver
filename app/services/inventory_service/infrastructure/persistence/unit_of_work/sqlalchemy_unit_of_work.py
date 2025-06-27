@@ -35,3 +35,14 @@ class SQLAlchemyUnitOfWork(UnitOfWork):
 
     def rollback(self):
         self.db_session.rollback()
+    
+    def __enter__(self):
+        """Enter context manager"""
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Exit context manager with automatic rollback on exception"""
+        if exc_type is not None:
+            self.rollback()
+        # Don't suppress the exception
+        return False

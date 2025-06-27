@@ -1,13 +1,16 @@
 from dataclasses import dataclass
-from app.shared.application.events.event_bus import Event
+
+class BaseEvent:
+    def __init__(self):
+        self.event_type = self.__class__.__name__
 
 
 @dataclass
-class OrderCreatedEvent(Event):
+class OrderCreatedEvent(BaseEvent):
     order_id: str 
 
     def to_dict(self):
         return {
-            'event_type': self.metadata.event_type,
+            'event_type': self.event_type,
             'order_id': self.order_id
         }
