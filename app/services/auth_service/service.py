@@ -236,6 +236,43 @@ class AuthService:
         except Exception as e:
             return None
 
+    def get_user_by_id(self, request: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Get user information by ID.
+        This method is called by other services via ACL.
+        
+        Args:
+            request: Request containing user_id
+            
+        Returns:
+            Dictionary containing user information
+        """
+        try:
+            user_id = request.get('user_id')
+            if not user_id:
+                return None
+                
+            # Get user by ID
+            user = self._uow.user.get_by_id(user_id)
+            if not user:
+                return None
+                
+            return {
+                'id': str(user.id),
+                'username': user.username,
+                'email': user.email,
+                'full_name': user.full_name,
+                'phone': user.phone,
+                'is_admin': user.is_admin,
+                'is_active': user.is_active,
+                'health_care_center_id': str(user.health_care_center_id) if user.health_care_center_id else None,
+                'created_at': user.created_at.isoformat() if user.created_at else None,
+                'updated_at': user.updated_at.isoformat() if user.updated_at else None
+            }
+            
+        except Exception as e:
+            return None
+
 
 
 

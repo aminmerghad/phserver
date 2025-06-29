@@ -277,6 +277,7 @@ class AuthTranslator:
         self._translators = {
             "GET_USER_HEALTH_CARE_CENTER": self._handle_get_user_health_care_center,
             "GET_HEALTH_CARE_CENTER_BY_ID": self._handle_get_health_care_center_by_id,
+            "GET_USER_BY_ID": self._handle_get_user_by_id,
         }
 
     def to_service_format(self, query_type: str, data: Dict[str, Any]) -> Any:
@@ -286,7 +287,7 @@ class AuthTranslator:
         return translator(data)
 
     def to_response_format(self, query_type: str, domain_data) -> Dict[str, Any]:
-        if query_type in ["GET_USER_HEALTH_CARE_CENTER", "GET_HEALTH_CARE_CENTER_BY_ID"]:
+        if query_type in ["GET_USER_HEALTH_CARE_CENTER", "GET_HEALTH_CARE_CENTER_BY_ID", "GET_USER_BY_ID"]:
             return domain_data
 
     def _handle_get_user_health_care_center(self, data: Dict[str, Any]) -> Dict[str, Any]:
@@ -300,6 +301,12 @@ class AuthTranslator:
         if hasattr(data, 'center_id'):
             return {"center_id": data.center_id}
         return {"center_id": data.get("center_id")}
+
+    def _handle_get_user_by_id(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle GET_USER_BY_ID operation"""
+        if hasattr(data, 'user_id'):
+            return {"user_id": data.user_id}
+        return {"user_id": data.get("user_id")}
 
 
 class DeliveryTranslator:

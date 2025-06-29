@@ -54,32 +54,98 @@ class OrderQueryService:
 
     def _get_product_names_batch(self, product_ids: List[UUID]) -> Dict[UUID, str]:
         """
-        Get multiple product names in batch to improve performance.
+        Get product names in batch for better performance.
+        Falls back to default names if product service is unavailable.
         """
-        if not self._acl:
+        product_names = {}
+        
+        if not self._acl or not product_ids:
+            # Return default names if ACL is not available or no product IDs
             return {pid: f"Product {str(pid).split('-')[0]}" for pid in product_ids}
             
         try:
             from app.services.order_service.infrastructure.adapters.outgoing.product_adapter import ProductServiceAdapter
             product_adapter = ProductServiceAdapter(self._acl)
-            products = product_adapter.get_products_by_ids(product_ids)
             
-            # Create a mapping of product_id to product_name
-            product_names = {}
             for product_id in product_ids:
-                if product_id in products and 'name' in products[product_id]:
-                    product_names[product_id] = products[product_id]['name']
-                else:
+                try:
+                    product = product_adapter.get_product_by_id(product_id)
+                    if product and 'name' in product:
+                        product_names[product_id] = product['name']
+                    else:
+                        product_names[product_id] = f"Product {str(product_id).split('-')[0]}"
+                except Exception:
                     product_names[product_id] = f"Product {str(product_id).split('-')[0]}"
                     
-            return product_names
-            
         except Exception as e:
             # Log the error but don't break the order query
             import logging
             logger = logging.getLogger(__name__)
             logger.warning(f"Failed to fetch product names in batch: {str(e)}")
-            return {pid: f"Product {str(pid).split('-')[0]}" for pid in product_ids}
+            # Return default names
+            product_names = {pid: f"Product {str(pid).split('-')[0]}" for pid in product_ids}
+            
+        return product_names
+
+    def _get_user_name(self, user_id: UUID) -> str:
+        """
+        Get user name from auth service via ACL.
+        Falls back to a default name if auth service is unavailable.
+        """
+        if not self._acl or not user_id:
+            return f"User {str(user_id).split('-')[0]}" if user_id else "Unknown User"
+            
+        try:
+            from app.services.order_service.infrastructure.adapters.outgoing.auth_adapter import AuthServiceAdapter
+            auth_adapter = AuthServiceAdapter(self._acl)
+            user = auth_adapter.get_user_by_id(user_id)
+            
+            if user and 'full_name' in user:
+                return user['full_name']
+            else:
+                return f"User {str(user_id).split('-')[0]}"
+                
+        except Exception as e:
+            # Log the error but don't break the order query
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Failed to fetch user name for {user_id}: {str(e)}")
+            return f"User {str(user_id).split('-')[0]}"
+
+    def _get_user_names_batch(self, user_ids: List[UUID]) -> Dict[UUID, str]:
+        """
+        Get user names in batch for better performance.
+        Falls back to default names if auth service is unavailable.
+        """
+        user_names = {}
+        
+        if not self._acl or not user_ids:
+            # Return default names if ACL is not available or no user IDs
+            return {uid: f"User {str(uid).split('-')[0]}" for uid in user_ids}
+            
+        try:
+            from app.services.order_service.infrastructure.adapters.outgoing.auth_adapter import AuthServiceAdapter
+            auth_adapter = AuthServiceAdapter(self._acl)
+            
+            for user_id in user_ids:
+                try:
+                    user = auth_adapter.get_user_by_id(user_id)
+                    if user and 'full_name' in user:
+                        user_names[user_id] = user['full_name']
+                    else:
+                        user_names[user_id] = f"User {str(user_id).split('-')[0]}"
+                except Exception:
+                    user_names[user_id] = f"User {str(user_id).split('-')[0]}"
+                    
+        except Exception as e:
+            # Log the error but don't break the order query
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Failed to fetch user names in batch: {str(e)}")
+            # Return default names
+            user_names = {uid: f"User {str(uid).split('-')[0]}" for uid in user_ids}
+            
+        return user_names
 
     def get_order_by_id(self, order_id: UUID) -> Optional[OrderModel]:
         """Get order details by ID with eager loading of items"""
@@ -152,7 +218,37 @@ class OrderQueryService:
         ).order_by(
             desc(OrderModel.created_at)
         ).offset((page - 1) * per_page).limit(per_page).all()
-        result = [self._to_summary_dto(order) for order in orders]
+        
+        # Get user name for this specific user
+        user_name = self._get_user_name(user_id)
+        
+        # Convert to DTOs with user name
+        result = []
+        for order in orders:
+            # Get all product IDs from the order items
+            product_ids = [item.product_id for item in order.items] if order.items else []
+            
+            # Fetch product names in batch for better performance
+            product_names = self._get_product_names_batch(product_ids)
+                
+            result.append(OrderSummaryDTO(
+                order_id=order.id,
+                consumer_id=order.user_id,
+                status=order.status,
+                total_amount=order.total_amount,
+                items_count=len(order.items) if order.items else 0,
+                created_at=order.created_at,
+                items=[{
+                    'id': item.id,
+                    'product_id': item.product_id,
+                    'name': product_names.get(item.product_id, f"Product {str(item.product_id).split('-')[0]}"),  # Use actual product name
+                    'quantity': item.quantity,
+                    'price': item.price,
+                    'total_price': item.quantity*item.price
+                } for item in order.items],
+                consumer_name=user_name
+            ))
+        
         # self._add_to_cache(cache_key, orders)
         return OrderFilterResponseDTO(
             orders=result,
@@ -208,7 +304,40 @@ class OrderQueryService:
             .limit(filter_dto.per_page) \
             .all()
 
-        result = [self._to_summary_dto(order) for order in orders]
+        # Get all unique user IDs for batch processing
+        user_ids = list(set([order.user_id for order in orders if order.user_id]))
+        user_names = self._get_user_names_batch(user_ids)
+
+        # Convert to DTOs with batch-fetched user names
+        result = []
+        for order in orders:
+            # Get all product IDs from the order items
+            product_ids = [item.product_id for item in order.items] if order.items else []
+            
+            # Fetch product names in batch for better performance
+            product_names = self._get_product_names_batch(product_ids)
+            
+            # Get consumer name from batch-fetched data
+            consumer_name = user_names.get(order.user_id) if order.user_id else None
+                
+            result.append(OrderSummaryDTO(
+                order_id=order.id,
+                consumer_id=order.user_id,
+                status=order.status,
+                total_amount=order.total_amount,
+                items_count=len(order.items) if order.items else 0,
+                created_at=order.created_at,
+                items=[{
+                    'id': item.id,
+                    'product_id': item.product_id,
+                    'name': product_names.get(item.product_id, f"Product {str(item.product_id).split('-')[0]}"),  # Use actual product name
+                    'quantity': item.quantity,
+                    'price': item.price,
+                    'total_price': item.quantity*item.price
+                } for item in order.items],
+                consumer_name=consumer_name
+            ))
+
         # self._add_to_cache(cache_key, result)
         return OrderFilterResponseDTO(
             orders=result,
@@ -219,7 +348,6 @@ class OrderQueryService:
                 per_page=filter_dto.per_page,
             )
         )
-
 
     # @lru_cache(maxsize=128)
     def get_user_order_stats(self, user_id: UUID) -> dict:
@@ -268,7 +396,36 @@ class OrderQueryService:
             desc(OrderModel.created_at)
         ).limit(limit).all()
 
-        result = [self._to_summary_dto(order) for order in orders]
+        # Get user name for this specific user
+        user_name = self._get_user_name(user_id)
+        
+        # Convert to DTOs with user name
+        result = []
+        for order in orders:
+            # Get all product IDs from the order items
+            product_ids = [item.product_id for item in order.items] if order.items else []
+            
+            # Fetch product names in batch for better performance
+            product_names = self._get_product_names_batch(product_ids)
+                
+            result.append(OrderSummaryDTO(
+                order_id=order.id,
+                consumer_id=order.user_id,
+                status=order.status,
+                total_amount=order.total_amount,
+                items_count=len(order.items) if order.items else 0,
+                created_at=order.created_at,
+                items=[{
+                    'id': item.id,
+                    'product_id': item.product_id,
+                    'name': product_names.get(item.product_id, f"Product {str(item.product_id).split('-')[0]}"),  # Use actual product name
+                    'quantity': item.quantity,
+                    'price': item.price,
+                    'total_price': item.quantity*item.price
+                } for item in order.items],
+                consumer_name=user_name
+            ))
+
         # self._add_to_cache(cache_key, result)
         return result
 
@@ -284,6 +441,9 @@ class OrderQueryService:
         
         # Fetch product names in batch for better performance
         product_names = self._get_product_names_batch(product_ids)
+        
+        # Fetch consumer name
+        consumer_name = self._get_user_name(entity.user_id) if entity.user_id else None
         
         return OrderDTO(
             order_id=entity.id,
@@ -301,7 +461,8 @@ class OrderQueryService:
             notes=entity.notes,
             created_at=entity.created_at,
             updated_at=entity.updated_at,
-            completed_at=entity.completed_at
+            completed_at=entity.completed_at,
+            consumer_name=consumer_name
         )
     
 
@@ -315,6 +476,9 @@ class OrderQueryService:
         
         # Fetch product names in batch for better performance
         product_names = self._get_product_names_batch(product_ids)
+        
+        # Fetch consumer name
+        consumer_name = self._get_user_name(model.user_id) if model.user_id else None
             
         return OrderSummaryDTO(
             order_id=model.id,
@@ -330,7 +494,8 @@ class OrderQueryService:
                 'quantity': item.quantity,
                 'price': item.price,
                 'total_price': item.quantity*item.price
-            } for item in model.items]
+            } for item in model.items],
+            consumer_name=consumer_name
         )
         
     def _get_from_cache(self, key: str) -> Any:

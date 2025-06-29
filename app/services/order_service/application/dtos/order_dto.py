@@ -40,6 +40,7 @@ class OrderDTO:
     created_at: datetime
     updated_at: datetime
     completed_at: Optional[datetime]
+    consumer_name: Optional[str] = None
 
 @dataclass
 class CreateOrderResponse:
@@ -54,6 +55,7 @@ class OrderSummaryDTO:
     items_count: int
     created_at: datetime
     items: List[dict]
+    consumer_name: Optional[str] = None
 
 @dataclass
 class OrderFilterPaginationDTO:

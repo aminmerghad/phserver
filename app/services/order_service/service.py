@@ -225,6 +225,7 @@ class OrderService:
                 'order_id': str(order_dto.order_id),
                 'consumer_id': str(order_dto.user_id),  # Changed from 'id' to 'order_id' for consistency
                 'user_id': str(order_dto.user_id),
+                'consumer_name': order_dto.consumer_name,  # Added consumer name
                 'status': order_dto.status,
                 'total_amount': float(order_dto.total_amount),
                 'items': order_dto.items,
@@ -491,14 +492,14 @@ class OrderService:
    
     def get_processing_orders(self, request: Dict[str, Any] = None) -> Dict[str, Any]:
         """
-        Get all orders with PROCESSING status.
+        Get all orders with PROCESSING status for delivery service.
         This method is called by the delivery service via ACL.
         
         Args:
-            request: Request parameters (optional)
+            request: Optional request parameters (not used currently)
             
         Returns:
-            Dictionary containing orders with PROCESSING status
+            Dictionary containing processing orders information
         """
         logger.info("Getting orders with PROCESSING status for delivery service")
         
@@ -528,6 +529,7 @@ class OrderService:
                     processing_orders.append({
                         'id': str(order_summary.order_id),
                         'user_id': str(order_summary.consumer_id),
+                        'consumer_name': order_summary.consumer_name,  # Added consumer name
                         'status': order_summary.status,
                         'total_amount': float(order_summary.total_amount),
                         'items': order_details.get('items', []),

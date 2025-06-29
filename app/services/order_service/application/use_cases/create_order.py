@@ -34,6 +34,7 @@ class CreateOrderDto(BaseModel):
     consumer_id:Optional[UUID]
     updated_at: Optional[datetime]
     completed_at: Optional[datetime]
+    consumer_name: Optional[str] = None
 
 class CreateOrderUseCase:
     def __init__(self, uow: UnitOfWork, order_qr: OrderQueryService):
@@ -147,6 +148,20 @@ class CreateOrderUseCase:
             quantity=item.quantity,
             price=float(item.price.amount)
             ) for item in order.items]
+        
+        # Fetch consumer name from auth service
+        consumer_name = None
+        if order.user_id:
+            try:
+                user_info = self.uow.order_adapter_service.get_user_by_id(order.user_id)
+                if user_info:
+                    consumer_name = user_info.get('full_name')
+            except Exception as e:
+                # Log error but don't fail the order creation
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(f"Failed to fetch user name for {order.user_id}: {str(e)}")
+        
         return CreateOrderDto(
             order_id=order.id,
             status=order.status,
@@ -155,7 +170,8 @@ class CreateOrderUseCase:
             updated_at=order.updated_at,
             completed_at=order.completed_at,
             items=order_items,      
-            consumer_id=order.user_id     
+            consumer_id=order.user_id,
+            consumer_name=consumer_name
         )
     
     def _calculate_total_amount(self, order_items: List[OrderItem]) -> Decimal:

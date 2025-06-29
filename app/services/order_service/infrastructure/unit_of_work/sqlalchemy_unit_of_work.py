@@ -9,43 +9,39 @@ from app.shared.acl.unified_acl import UnifiedACL
 from app.shared.application.events.event_bus import EventBus
 
 class SQLAlchemyUnitOfWork(UnitOfWork):
-    def __init__(self, session: Session,event_bus: EventBus,acl: UnifiedACL):
-        self._session = session
-        self._event_bus = event_bus
-        self._acl = acl
-        self._order_adapter_service = None
-        self._order_repository=None
-        
+    def __init__(self, session: Session, event_bus: EventBus = None, order_adapter_service: OrderAdapterService = None):
+        self.db_session = session
+        self.event_bus = event_bus
+        self.order_adapter_service = order_adapter_service
+        self._order_repository = None
+        self._batch = None
+
     @property
     def order_repository(self):
-        if not self._order_repository:
-            self._order_repository = SQLAlchemyOrderRepository(self._session)
+        if self._order_repository is None:
+            self._order_repository = SQLAlchemyOrderRepository(self.db_session)
         return self._order_repository
-    @property
-    def order_adapter_service(self):
-        if not self._order_adapter_service:
-            self._order_adapter_service = OrderAdapterService(self._acl)
-        return self._order_adapter_service
 
-    def __enter__(self) -> 'SQLAlchemyUnitOfWork':
+    def commit(self):
+        self.db_session.commit()
+
+    def rollback(self):
+        self.db_session.rollback()
+
+    def __enter__(self):
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         if exc_type:
             self.rollback()
-        self._session.close()
-
-    def commit(self) -> None:
-        self._session.commit()
-
-    def rollback(self) -> None:
-        self._session.rollback()
+        else:
+            self.commit()
 
     def refresh(self, instance: Any) -> None:
-        self._session.refresh(instance)
+        self.db_session.refresh(instance)
     
     def publish(self, event: Any) -> None:
-        self._event_bus.publish(event)
+        self.event_bus.publish(event)
 
 # import logging
 # from typing import Dict, Any, Optional
