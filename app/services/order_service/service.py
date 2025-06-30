@@ -226,6 +226,7 @@ class OrderService:
                 'consumer_id': str(order_dto.user_id),  # Changed from 'id' to 'order_id' for consistency
                 'user_id': str(order_dto.user_id),
                 'consumer_name': order_dto.consumer_name,  # Added consumer name
+                'health_center_name': order_dto.health_center_name,  # Added health center name
                 'status': order_dto.status,
                 'total_amount': float(order_dto.total_amount),
                 'items': order_dto.items,
@@ -530,6 +531,7 @@ class OrderService:
                         'id': str(order_summary.order_id),
                         'user_id': str(order_summary.consumer_id),
                         'consumer_name': order_summary.consumer_name,  # Added consumer name
+                        'health_center_name': order_summary.health_center_name,  # Added health center name
                         'status': order_summary.status,
                         'total_amount': float(order_summary.total_amount),
                         'items': order_details.get('items', []),

@@ -15,7 +15,7 @@ class SQLAlchemyUnitOfWork(UnitOfWork):
         self.order_adapter_service = order_adapter_service
         self._order_repository = None
         self._batch = None
-
+        
     @property
     def order_repository(self):
         if self._order_repository is None:

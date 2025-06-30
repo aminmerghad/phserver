@@ -76,7 +76,7 @@ class OrderQueryService:
                         product_names[product_id] = f"Product {str(product_id).split('-')[0]}"
                 except Exception:
                     product_names[product_id] = f"Product {str(product_id).split('-')[0]}"
-                    
+            
         except Exception as e:
             # Log the error but don't break the order query
             import logging
@@ -146,6 +146,94 @@ class OrderQueryService:
             user_names = {uid: f"User {str(uid).split('-')[0]}" for uid in user_ids}
             
         return user_names
+
+    def _get_health_center_name(self, user_id: UUID) -> str:
+        """Get health center name for a user"""
+        if not user_id or not self._acl:
+            return None
+            
+        try:
+            from app.services.order_service.infrastructure.adapters.outgoing.auth_adapter import AuthServiceAdapter
+            auth_adapter = AuthServiceAdapter(self._acl)
+            
+            # First get the user to find their health_care_center_id
+            user = auth_adapter.get_user_by_id(user_id)
+            if not user or not user.get('health_care_center_id'):
+                return None
+                
+            # Then get the health center details
+            health_care_center_id = user.get('health_care_center_id')
+            center = auth_adapter.get_health_care_center_by_id(UUID(health_care_center_id))
+            if center and center.get('name'):
+                return center['name']
+            else:
+                return None
+                
+        except Exception as e:
+            # Log error but don't fail the query
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Error fetching health center for user {user_id}: {str(e)}")
+            return None
+
+    def _get_health_center_names_batch(self, user_ids: List[UUID]) -> Dict[UUID, str]:
+        """Get health center names for multiple users in a single batch operation"""
+        if not user_ids or not self._acl:
+            return {}
+            
+        health_center_names = {}
+        
+        try:
+            from app.services.order_service.infrastructure.adapters.outgoing.auth_adapter import AuthServiceAdapter
+            auth_adapter = AuthServiceAdapter(self._acl)
+            
+            # Get all users by IDs first to get their health_care_center_ids
+            users_data = {}
+            for user_id in user_ids:
+                try:
+                    user = auth_adapter.get_user_by_id(user_id)
+                    if user:
+                        users_data[user_id] = user
+                except Exception as e:
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.warning(f"Error fetching user {user_id}: {str(e)}")
+                    continue
+            
+            # Get unique health center IDs
+            center_ids = set()
+            for user_data in users_data.values():
+                if user_data.get('health_care_center_id'):
+                    center_ids.add(UUID(user_data['health_care_center_id']))
+            
+            # Fetch health center details for all unique center IDs
+            centers_data = {}
+            for center_id in center_ids:
+                try:
+                    center = auth_adapter.get_health_care_center_by_id(center_id)
+                    if center:
+                        centers_data[center_id] = center
+                except Exception as e:
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.warning(f"Error fetching health center {center_id}: {str(e)}")
+                    continue
+            
+            # Map user IDs to health center names
+            for user_id, user_data in users_data.items():
+                if user_data.get('health_care_center_id'):
+                    center_id = UUID(user_data['health_care_center_id'])
+                    center_data = centers_data.get(center_id)
+                    if center_data and center_data.get('name'):
+                        health_center_names[user_id] = center_data['name']
+                        
+        except Exception as e:
+            # If batch operation fails, return empty dict
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Error in batch health center fetch: {str(e)}")
+            
+        return health_center_names
 
     def get_order_by_id(self, order_id: UUID) -> Optional[OrderModel]:
         """Get order details by ID with eager loading of items"""
@@ -221,8 +309,9 @@ class OrderQueryService:
         
         # Get user name for this specific user
         user_name = self._get_user_name(user_id)
+        health_center_name = self._get_health_center_name(user_id)
         
-        # Convert to DTOs with user name
+        # Convert to DTOs with user name and health center name
         result = []
         for order in orders:
             # Get all product IDs from the order items
@@ -246,7 +335,8 @@ class OrderQueryService:
                     'price': item.price,
                     'total_price': item.quantity*item.price
                 } for item in order.items],
-                consumer_name=user_name
+                consumer_name=user_name,
+                health_center_name=health_center_name
             ))
         
         # self._add_to_cache(cache_key, orders)
@@ -307,8 +397,9 @@ class OrderQueryService:
         # Get all unique user IDs for batch processing
         user_ids = list(set([order.user_id for order in orders if order.user_id]))
         user_names = self._get_user_names_batch(user_ids)
+        health_center_names = self._get_health_center_names_batch(user_ids)
 
-        # Convert to DTOs with batch-fetched user names
+        # Convert to DTOs with batch-fetched user names and health center names
         result = []
         for order in orders:
             # Get all product IDs from the order items
@@ -317,8 +408,9 @@ class OrderQueryService:
             # Fetch product names in batch for better performance
             product_names = self._get_product_names_batch(product_ids)
             
-            # Get consumer name from batch-fetched data
+            # Get consumer name and health center name from batch-fetched data
             consumer_name = user_names.get(order.user_id) if order.user_id else None
+            health_center_name = health_center_names.get(order.user_id) if order.user_id else None
                 
             result.append(OrderSummaryDTO(
                 order_id=order.id,
@@ -335,7 +427,8 @@ class OrderQueryService:
                     'price': item.price,
                     'total_price': item.quantity*item.price
                 } for item in order.items],
-                consumer_name=consumer_name
+                consumer_name=consumer_name,
+                health_center_name=health_center_name
             ))
 
         # self._add_to_cache(cache_key, result)
@@ -398,8 +491,9 @@ class OrderQueryService:
 
         # Get user name for this specific user
         user_name = self._get_user_name(user_id)
+        health_center_name = self._get_health_center_name(user_id)
         
-        # Convert to DTOs with user name
+        # Convert to DTOs with user name and health center name
         result = []
         for order in orders:
             # Get all product IDs from the order items
@@ -423,7 +517,8 @@ class OrderQueryService:
                     'price': item.price,
                     'total_price': item.quantity*item.price
                 } for item in order.items],
-                consumer_name=user_name
+                consumer_name=user_name,
+                health_center_name=health_center_name
             ))
 
         # self._add_to_cache(cache_key, result)
@@ -442,8 +537,9 @@ class OrderQueryService:
         # Fetch product names in batch for better performance
         product_names = self._get_product_names_batch(product_ids)
         
-        # Fetch consumer name
+        # Fetch consumer name and health center name
         consumer_name = self._get_user_name(entity.user_id) if entity.user_id else None
+        health_center_name = self._get_health_center_name(entity.user_id) if entity.user_id else None
         
         return OrderDTO(
             order_id=entity.id,
@@ -462,7 +558,8 @@ class OrderQueryService:
             created_at=entity.created_at,
             updated_at=entity.updated_at,
             completed_at=entity.completed_at,
-            consumer_name=consumer_name
+            consumer_name=consumer_name,
+            health_center_name=health_center_name
         )
     
 
@@ -477,8 +574,9 @@ class OrderQueryService:
         # Fetch product names in batch for better performance
         product_names = self._get_product_names_batch(product_ids)
         
-        # Fetch consumer name
+        # Fetch consumer name and health center name
         consumer_name = self._get_user_name(model.user_id) if model.user_id else None
+        health_center_name = self._get_health_center_name(model.user_id) if model.user_id else None
             
         return OrderSummaryDTO(
             order_id=model.id,
@@ -495,7 +593,8 @@ class OrderQueryService:
                 'price': item.price,
                 'total_price': item.quantity*item.price
             } for item in model.items],
-            consumer_name=consumer_name
+            consumer_name=consumer_name,
+            health_center_name=health_center_name
         )
         
     def _get_from_cache(self, key: str) -> Any:

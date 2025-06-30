@@ -35,6 +35,7 @@ class CreateOrderDto(BaseModel):
     updated_at: Optional[datetime]
     completed_at: Optional[datetime]
     consumer_name: Optional[str] = None
+    health_center_name: Optional[str] = None
 
 class CreateOrderUseCase:
     def __init__(self, uow: UnitOfWork, order_qr: OrderQueryService):
@@ -49,21 +50,21 @@ class CreateOrderUseCase:
         # if command.user_id:
         #     self._check_user_eligibility(command.user_id)
         
-        # Check stock availability before creating order
+            # Check stock availability before creating order
         self._check_stock_level(command)
             
-        # Create order items and calculate total
+            # Create order items and calculate total
         order_items = self._order_item_list(command)
         total_amount = self._calculate_total_amount(order_items)
         
-        # Create the order in PENDING status
+            # Create the order in PENDING status
         order = self._create_order(command, order_items, total_amount)
         
         # Track if stock release event was published to avoid duplicates
         stock_release_published = False
         
         try:
-            # Publish stock release event
+                # Publish stock release event
             self.uow.publish(StockReleaseRequestedEvent(
                 order_id=str(order.id),  # Convert UUID to string
                 items=[{
@@ -81,15 +82,15 @@ class CreateOrderUseCase:
             # Commit transaction
             self.uow.commit()
             
-            # Run post-creation workflows in a separate process/thread
+                # Run post-creation workflows in a separate process/thread
             # self._trigger_post_creation_workflows(order)
                 
-            # Create DTO for response
+                # Create DTO for response
             order_dto = self._create_order_dto(order)
             return order_dto
                 
         except Exception as e:
-            # Rollback transaction in case of error
+                # Rollback transaction in case of error
             self.uow.rollback()
             
             # Log the error with context
@@ -149,13 +150,29 @@ class CreateOrderUseCase:
             price=float(item.price.amount)
             ) for item in order.items]
         
-        # Fetch consumer name from auth service
+        # Fetch consumer name and health center name from auth service
         consumer_name = None
+        health_center_name = None
         if order.user_id:
             try:
                 user_info = self.uow.order_adapter_service.get_user_by_id(order.user_id)
                 if user_info:
                     consumer_name = user_info.get('full_name')
+                    
+                    # Fetch health center name if user has health_care_center_id
+                    health_care_center_id = user_info.get('health_care_center_id')
+                    if health_care_center_id:
+                        try:
+                            from uuid import UUID
+                            center_info = self.uow.order_adapter_service.get_health_care_center_by_id(UUID(health_care_center_id))
+                            if center_info:
+                                health_center_name = center_info.get('name')
+                        except Exception as e:
+                            # Log error but don't fail the order creation
+                            import logging
+                            logger = logging.getLogger(__name__)
+                            logger.warning(f"Failed to fetch health center info for {health_care_center_id}: {str(e)}")
+                            
             except Exception as e:
                 # Log error but don't fail the order creation
                 import logging
@@ -171,7 +188,8 @@ class CreateOrderUseCase:
             completed_at=order.completed_at,
             items=order_items,      
             consumer_id=order.user_id,
-            consumer_name=consumer_name
+            consumer_name=consumer_name,
+            health_center_name=health_center_name
         )
     
     def _calculate_total_amount(self, order_items: List[OrderItem]) -> Decimal:

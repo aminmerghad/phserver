@@ -14,6 +14,7 @@ class OrderSchema(Schema):
     order_id = fields.UUID(dump_only=True)
     consumer_id = fields.UUID(dump_only=True)
     consumer_name = fields.Str(dump_only=True)
+    health_center_name = fields.Str(dump_only=True)
     user_id = fields.UUID(dump_only=True)
 
     items = fields.List(fields.Nested(OrderItemSchema))

@@ -41,6 +41,7 @@ class OrderDTO:
     updated_at: datetime
     completed_at: Optional[datetime]
     consumer_name: Optional[str] = None
+    health_center_name: Optional[str] = None
 
 @dataclass
 class CreateOrderResponse:
@@ -56,6 +57,7 @@ class OrderSummaryDTO:
     created_at: datetime
     items: List[dict]
     consumer_name: Optional[str] = None
+    health_center_name: Optional[str] = None
 
 @dataclass
 class OrderFilterPaginationDTO:

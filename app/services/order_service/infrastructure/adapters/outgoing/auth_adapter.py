@@ -44,6 +44,37 @@ class AuthServiceAdapter:
             logger.warning(f"Failed to fetch user {user_id} from auth service: {str(e)}")
             return None
 
+    def get_health_care_center_by_id(self, center_id: UUID) -> Optional[Dict[str, Any]]:
+        """
+        Get health care center information by ID from the auth service.
+        
+        Args:
+            center_id: The UUID of the health care center to fetch
+            
+        Returns:
+            Health care center information as a dictionary, or None if not found
+        """
+        try:
+            result = self._acl.execute_service_operation(
+                ServiceContext(
+                    service_type=ServiceType.AUTH,
+                    operation="GET_HEALTH_CARE_CENTER_BY_ID",
+                    data={"center_id": str(center_id)}
+                )
+            )
+            
+            if result.success and result.data:
+                return result.data
+            else:
+                return None
+                
+        except Exception as e:
+            # Log the error but don't raise to avoid breaking order queries
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Failed to fetch health care center {center_id} from auth service: {str(e)}")
+            return None
+
     def get_users_by_ids(self, user_ids: List[UUID]) -> Dict[UUID, Dict[str, Any]]:
         """
         Get multiple users by their IDs from the auth service.
