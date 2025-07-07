@@ -38,6 +38,7 @@ from app.services.order_service.domain.value_objects.order_status import OrderSt
 from app.services.order_service.infrastructure.persistence.mappers.order_mapper import OrderMapper
 from app.services.order_service.infrastructure.query_services.order_query_service import OrderQueryService
 from app.services.order_service.infrastructure.unit_of_work.sqlalchemy_unit_of_work import SQLAlchemyUnitOfWork
+from app.services.order_service.infrastructure.adapters.order_adpter_service import OrderAdapterService
 from app.shared.acl.unified_acl import UnifiedACL
 from app.shared.application.events.event_bus import EventBus
 
@@ -54,7 +55,8 @@ class OrderService:
         logger.info("Order service initialized")
 
     def _init_resources(self):
-        self._uow = SQLAlchemyUnitOfWork(self._db_session, self._event_bus, self._acl)
+        self._order_adapter_service = OrderAdapterService(self._acl)
+        self._uow = SQLAlchemyUnitOfWork(self._db_session, self._event_bus, self._order_adapter_service)
         self._query_service = OrderQueryService(self._db_session, self._acl)
         self._create_order_use_case = CreateOrderUseCase(self._uow, self._query_service)
         self._update_order_use_case = UpdateOrderUseCase(self._uow, self._query_service)
